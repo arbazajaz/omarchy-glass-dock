@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Effects
 import Quickshell
 import Quickshell.Hyprland
+import Quickshell.Io
 import Quickshell.Wayland
 import qs.Commons
 import qs.Ui
@@ -11,6 +12,7 @@ OverlayWindow {
   id: overview
 
   required property var dock
+  readonly property var spaceHost: overview
   property int selectedIndex: 0
   property var selectedWorkspace: null
   property bool closing: false
@@ -23,14 +25,138 @@ OverlayWindow {
     var right = b.workspace.id < 0 ? Number.MAX_SAFE_INTEGER : b.workspace.id
     return left - right
   })
+  property var numberedSlots: []
+  property bool addingSpace: false
+  property var removal: null
+  property var dragWindow: null
+  property var dragSource: null
+  property var dragDestination: null
+  property point dragPoint
+  readonly property var activeWorkspaceId: Hyprland.focusedMonitor && Hyprland.focusedMonitor.activeWorkspace
+    ? Hyprland.focusedMonitor.activeWorkspace.id : null
+  readonly property string wallpaperUrl: shown ? Util.fileUrl(wallpaperPath) : ""
+  readonly property color accent: dock && dock.backgroundColor ? Qt.lighter(dock.backgroundColor, 2)
+    : dock && dock.dockStyle === "native" ? "#ffab64" : dock && dock.dockStyle === "aurora" ? "#8df3d9" : "#a4caff"
+
   readonly property var workspaceGroups: {
-    var seen = new Set()
-    return windows.map(window => window.workspace).filter(function(workspace) {
-      if (seen.has(workspace.id)) return false
-      seen.add(workspace.id)
-      return true
+    var byId = new Map()
+    for (var i = 0; i < numberedSlots.length; i++) {
+      var id = numberedSlots[i]
+      byId.set(id, { id: id, name: String(id), workspace: null, windows: [] })
+    }
+    var workspaces = Hyprland.workspaces.values
+    for (var j = 0; j < workspaces.length; j++) {
+      var workspace = workspaces[j]
+      if (workspace.name.indexOf("special:") === 0) continue
+      byId.set(workspace.id, { id: workspace.id, name: workspace.name, workspace: workspace, windows: [] })
+    }
+    for (var k = 0; k < windows.length; k++) {
+      var group = byId.get(windows[k].workspace.id)
+      if (group) group.windows.push(windows[k])
+    }
+    return Array.from(byId.values()).sort(function(a, b) {
+      if (a.id > 0 && b.id < 0) return -1
+      if (a.id < 0 && b.id > 0) return 1
+      return a.id < 0 ? b.id - a.id : a.id - b.id
     })
   }
+
+  Process {
+    id: slotQuery
+    command: ["hyprctl", "repl", "local m=hl.get_active_monitor(); local ids={}; if m and o.workspaces then for slot=1,o.workspaces.slots do ids[slot]=o.workspaces.workspace_id(m,slot) end end; return table.concat(ids, ',')"]
+    stdout: StdioCollector {
+      onStreamFinished: {
+        var value = text.trim()
+        if (/^[0-9,]+$/.test(value)) overview.numberedSlots = value.split(",").map(Number)
+      }
+    }
+  }
+
+  onActiveWorkspaceIdChanged: {
+    if (!shown || activeWorkspaceId === null) return
+    if (selectedWorkspace !== null || addingSpace) selectWorkspace(activeWorkspaceId)
+    addingSpace = false
+  }
+
+  onWorkspaceGroupsChanged: {
+    if (selectedWorkspace !== null && !workspaceGroups.some(group => group.id === selectedWorkspace)) {
+      selectWorkspace(null)
+    }
+  }
+
+  function label(key) { return strings.t(key) }
+
+  function ipc(expression) {
+    Quickshell.execDetached(["hyprctl", "eval", expression])
+    pollAfterAction.restart()
+  }
+
+  Timer {
+    id: pollAfterAction
+    interval: 160
+    onTriggered: {
+      Hyprland.refreshWorkspaces()
+      Hyprland.refreshToplevels()
+      overview.addingSpace = false
+    }
+  }
+
+  function switchSpace(id) {
+    if (!Number.isInteger(id)) return
+    selectWorkspace(id)
+    ipc("if o.spaces then o.spaces.focus(" + id + ") end")
+  }
+
+  function addSpace() {
+    addingSpace = true
+    ipc("if o.spaces then o.spaces.add() end")
+  }
+
+  function requestRemove(group) {
+    var destination = workspaceGroups.find(space => space.id === activeWorkspaceId && space.id !== group.id)
+      || workspaceGroups.find(space => space.id > 0 && space.id !== group.id)
+    if (!destination) return
+    if (group.windows.length === 0) removeSpace(group.id, destination.id)
+    else removal = { source: group, destination: destination }
+  }
+
+  function removeSpace(id, destination, allowMove) {
+    if (!Number.isInteger(id) || !Number.isInteger(destination)) return
+    removal = null
+    if (selectedWorkspace === id) selectWorkspace(destination)
+    ipc("if o.spaces then o.spaces.remove(" + id + "," + destination + "," + (allowMove ? "true" : "false") + ") end")
+  }
+
+  function updateDrag(window, point) {
+    if (!window || !window.workspace) return
+    dragWindow = window
+    dragSource = window.workspace.id
+    dragPoint = point
+    dragDestination = workspaceStrip.targetAt(point)
+  }
+
+  function finishDrag(drop) {
+    var address = String(dragWindow ? dragWindow.address : "")
+    var id = dragDestination
+    if (drop && Number.isInteger(id) && id !== dragSource && /^(0x)?[0-9a-f]+$/i.test(address)) {
+      if (address.indexOf("0x") !== 0) address = "0x" + address
+      ipc('if o.spaces then o.spaces.move("' + address + '",' + id + ') end')
+    }
+    dragWindow = null
+    dragSource = null
+    dragDestination = null
+  }
+
+  Timer {
+    interval: 65
+    repeat: true
+    running: !!overview.dragWindow
+    onTriggered: {
+      workspaceStrip.scrollDrag(overview.dragPoint)
+      overview.dragDestination = workspaceStrip.targetAt(overview.dragPoint)
+    }
+  }
+
   readonly property var displayedWindows: selectedWorkspace === null ? windows
     : windows.filter(window => window.workspace.id === selectedWorkspace)
   readonly property int windowCount: displayedWindows.length
@@ -86,6 +212,8 @@ OverlayWindow {
 
   function close() {
     if (!shown || closing) return
+    finishDrag(false)
+    removal = null
     if (Style.reduceMotion) shown = false
     else {
       closing = true
@@ -100,7 +228,11 @@ OverlayWindow {
 
   function workspaceLabel(workspace) {
     if (DockModel.isMinimizedWorkspace(workspace.name)) return strings.t("overview.minimized")
-    if (workspace.id <= 0) return workspace.name.replace(/^special:/, "")
+    if (workspace.id <= 0) {
+      var match = /^Glass-Space-([0-9]+)$/.exec(workspace.name)
+      return match ? strings.t("spaces.name").arg(match[1]) : workspace.name.replace(/^special:/, "")
+    }
+    if (workspace.name && workspace.name !== String(workspace.id)) return workspace.name
     return strings.t("overview.workspace").arg(I18n.formatNumber(workspace.id))
   }
 
@@ -116,7 +248,9 @@ OverlayWindow {
     closeDelay.stop()
     closing = false
     selectedWorkspace = null
+    Hyprland.refreshWorkspaces()
     Hyprland.refreshToplevels()
+    slotQuery.running = true
     selectedIndex = 0
     shown = true
     grid.positionViewAtBeginning()
@@ -151,7 +285,7 @@ OverlayWindow {
       id: wallpaper
       anchors.fill: parent
       visible: false
-      source: overview.shown ? Util.fileUrl(overview.wallpaperPath) : ""
+      source: overview.wallpaperUrl
       sourceSize: Qt.size(Math.round(width * 0.6), Math.round(height * 0.6))
       fillMode: Image.PreserveAspectCrop
       cache: false
@@ -182,6 +316,7 @@ OverlayWindow {
 
     Item {
       id: panel
+      readonly property var spaceOwner: overview.spaceHost
       anchors.fill: parent
       anchors.margins: Style.space(34)
       focus: true
@@ -191,70 +326,20 @@ OverlayWindow {
         NumberAnimation { duration: Style.duration(overview.closing ? 120 : 190); easing.type: Easing.OutCubic }
       }
 
-      Keys.onEscapePressed: overview.close()
+      Keys.onEscapePressed: if (overview.removal) overview.removal = null; else overview.close()
       Keys.onLeftPressed: overview.moveSelection(-1)
       Keys.onRightPressed: overview.moveSelection(1)
       Keys.onUpPressed: overview.moveSelection(-overview.columns)
       Keys.onDownPressed: overview.moveSelection(overview.columns)
-      Keys.onReturnPressed: overview.activate(overview.displayedWindows[overview.selectedIndex])
-      Keys.onEnterPressed: overview.activate(overview.displayedWindows[overview.selectedIndex])
+      Keys.onReturnPressed: function(event) { if (overview.removal) removalDialog.handleKey(event); else overview.activate(overview.displayedWindows[overview.selectedIndex]) }
+      Keys.onEnterPressed: function(event) { if (overview.removal) removalDialog.handleKey(event); else overview.activate(overview.displayedWindows[overview.selectedIndex]) }
 
-      Flickable {
+      SpacesStrip {
         id: workspaceStrip
         anchors.top: parent.top
-        anchors.horizontalCenter: parent.horizontalCenter
-        width: Math.min(parent.width, workspaceTabs.width)
-        height: workspaceTabs.height
-        contentWidth: workspaceTabs.width
-        flickableDirection: Flickable.HorizontalFlick
-        boundsBehavior: Flickable.StopAtBounds
-        clip: true
-
-        Row {
-          id: workspaceTabs
-          spacing: Style.space(8)
-
-          Repeater {
-            model: [null].concat(overview.workspaceGroups)
-            delegate: Rectangle {
-              id: tab
-              required property var modelData
-              readonly property bool closingCard: overview.closingWindow === toplevel && !!toplevel
-            opacity: closingCard ? 0 : 1
-            scale: closingCard ? 0.95 : 1
-
-            Behavior on opacity {
-              NumberAnimation { duration: Style.duration(120); easing.type: Easing.OutCubic }
-            }
-            Behavior on scale {
-              NumberAnimation { duration: Style.duration(120); easing.type: Easing.OutCubic }
-            }
-
-            readonly property bool selected: overview.selectedWorkspace === (modelData ? modelData.id : null)
-              width: tabLabel.implicitWidth + Style.space(28)
-              height: Style.space(34)
-              radius: height / 2
-              color: selected ? "#a7435b80" : "#40232c43"
-              border.color: selected ? "#add9e9ff" : "#44d1deff"
-
-              Text {
-                id: tabLabel
-                anchors.centerIn: parent
-                textFormat: Text.PlainText
-                text: tab.modelData ? overview.workspaceLabel(tab.modelData) : strings.t("overview.all")
-                color: "#f3f7ff"
-                font.pixelSize: Style.font.body
-                font.weight: tab.selected ? Font.DemiBold : Font.Normal
-              }
-
-              MouseArea {
-                anchors.fill: parent
-                cursorShape: Qt.PointingHandCursor
-                onClicked: overview.selectWorkspace(tab.modelData ? tab.modelData.id : null)
-              }
-            }
-          }
-        }
+        width: parent.width
+        height: implicitHeight
+        overview: panel.spaceOwner
       }
 
       Text {
@@ -273,7 +358,7 @@ OverlayWindow {
         anchors.left: parent.left
         anchors.right: parent.right
         anchors.bottom: parent.bottom
-        anchors.bottomMargin: workspaceStrip.height
+        anchors.bottomMargin: Style.space(22)
 
         GridView {
           id: grid
@@ -408,15 +493,35 @@ OverlayWindow {
             }
 
             MouseArea {
+              id: windowPointer
               anchors.fill: frame
               enabled: !windowCard.closingCard
+              preventStealing: true
+              property point startPoint
+              property bool moved: false
+              onPressed: function(event) {
+                moved = false
+                startPoint = Qt.point(event.x, event.y)
+              }
+              onPositionChanged: function(event) {
+                if (!pressed) return
+                if (!moved && Math.hypot(event.x - startPoint.x, event.y - startPoint.y) < Style.space(8)) return
+                moved = true
+                overview.updateDrag(windowCard.modelData, mapToItem(overview.contentItem, event.x, event.y))
+              }
+              onReleased: function(event) {
+                if (!moved) return
+                overview.updateDrag(windowCard.modelData, mapToItem(overview.contentItem, event.x, event.y))
+                overview.finishDrag(true)
+              }
+              onCanceled: if (moved) overview.finishDrag(false)
               hoverEnabled: true
               cursorShape: Qt.PointingHandCursor
               onEntered: overview.selectedIndex = windowCard.index
               Accessible.role: Accessible.Button
               Accessible.name: windowCard.toplevel ? windowCard.toplevel.title : ""
               Accessible.onPressAction: overview.activate(windowCard.modelData)
-              onClicked: overview.activate(windowCard.modelData)
+              onClicked: if (!moved) overview.activate(windowCard.modelData)
             }
 
             Rectangle {
@@ -452,6 +557,43 @@ OverlayWindow {
           }
         }
       }
+
+      ConfirmDialog {
+        id: removalDialog
+        anchors.fill: parent
+        z: 10
+        opened: !!overview.removal
+        message: overview.removal ? strings.t("spaces.confirmRemove")
+          .arg(overview.workspaceLabel(overview.removal.source))
+          .arg(overview.workspaceLabel(overview.removal.destination)) : ""
+        confirmText: strings.t("spaces.moveRemove")
+        background: "#25334c"
+        foreground: "#f3f6ff"
+        scrim: "#af101523"
+        selectedBackground: overview.accent
+        selectedText: "#121b2b"
+        fontFamily: Style.font.family
+        cornerRadius: Style.cornerRadius
+        onCanceled: overview.removal = null
+        onConfirmed: if (overview.removal) overview.removeSpace(overview.removal.source.id, overview.removal.destination.id, true)
+      }
+    }
+
+    DockIcon {
+      z: 20
+      readonly property var entry: overview.dragWindow && overview.dragWindow.wayland
+        ? overview.dock.entryForAppId(overview.dragWindow.wayland.appId) : null
+      x: overview.dragPoint.x - width / 2
+      y: overview.dragPoint.y - height / 2 + Style.space(18)
+      width: Style.space(48)
+      height: width
+      opacity: overview.dragWindow ? 1 : 0
+      scale: overview.dragDestination !== null ? 0.85 : 1
+      appId: entry ? entry.id : ""
+      source: overview.dock.appLibrary
+        ? overview.dock.appLibrary.iconSource(DockModel.iconNameForEntry(entry)) : ""
+      Behavior on opacity { NumberAnimation { duration: Style.duration(120); easing.type: Easing.OutCubic } }
+      Behavior on scale { NumberAnimation { duration: Style.duration(135); easing.type: Easing.OutCubic } }
     }
   }
 }

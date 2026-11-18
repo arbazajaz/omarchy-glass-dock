@@ -35,12 +35,14 @@ The files under [hypr](hypr/) are opt-in. Back up your configuration and review 
 ```lua
 local glass_dock = os.getenv("HOME") .. "/.config/omarchy/plugins/io.github.arbazajaz.glass-dock/hypr/"
 dofile(glass_dock .. "appearance.lua")
+dofile(glass_dock .. "spaces.lua")
 dofile(glass_dock .. "gestures.lua")
 dofile(glass_dock .. "window-management.lua")
 ```
 
 - **Appearance** enables compositor blur for the dock and overlays, plus a workspace slide animation. The blur radius is a Hyprland compositor setting.
 - **Gestures** adds macOS-style four-finger trackpad swipes. Remove any overlapping custom four-finger bindings before loading it.
+- **Spaces** adds persistent, dynamically created workspaces to Mission Control. The overview shows Omarchy's numbered workspaces plus any other native desktops, including empty ones. Use the **+** button to create a Space. Drag a window card onto a workspace thumbnail to move it while preserving its window state. Use the **×** on a created Space to remove it; if it has windows, Mission Control asks before moving them to a safe destination. New Spaces are saved across logins. The helper is loaded before gestures because the gestures can navigate to these named Spaces.
 - **Window management** updates **Alt+Tab**, raises maximized floating windows on focus, and updates **Super+F** to preserve a displaced maximized window’s geometry. Application-specific fullscreen commands use Hyprland’s native behavior.
 
 Run `hyprctl reload` and `hyprctl configerrors` after editing. Dynamic Wallpaper samples the active local wallpaper while selected and makes no network requests.
@@ -57,6 +59,14 @@ With `hypr/gestures.lua` loaded:
 | Right | Switch to the previous numbered workspace |
 
 Horizontal swipes move one workspace at a time, including empty workspaces.
+
+### Mission Control Spaces
+
+![Mission Control Spaces strip with desktop previews and the add button](docs/spaces.png)
+
+Mission Control's top row is a horizontally scrollable Spaces overview. It includes all configured Omarchy workspace slots and native workspaces on the current monitor, not a fixed two- or five-desktop list. The active desktop is outlined. Click a preview to switch to it and filter the window cards below. Drag a card to a thumbnail to move that actual window. **+** creates a persistent named Space; **×** removes one of those created Spaces. When a Space contains windows, confirm the move before removal.
+
+![Confirmation before removing a Space that contains windows](docs/spaces-remove-confirmation.png)
 
 ## Remove
 

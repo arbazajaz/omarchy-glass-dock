@@ -26,18 +26,8 @@ PanelWindow {
   readonly property int workspaceId: workspace ? workspace.id : -1
   // The most fullscreen window on the workspace, as Hyprland counts it: 1 is
   // maximized, and 2 or 3 fullscreen.
-  readonly property int fullscreenMode: {
-    var mode = 0
-    var toplevels = Hyprland.toplevels.values
-    for (var i = 0; i < toplevels.length; i++) {
-      var toplevel = toplevels[i]
-      if (!toplevel.workspace || toplevel.workspace.id !== workspaceId) continue
-      var ipc = toplevel.lastIpcObject
-      mode = Math.max(mode, ipc && ipc.fullscreen ? ipc.fullscreen : 0)
-    }
-    return mode
-  }
-  readonly property bool shown: !!dock && workspaceId > 0 && (position === "bottom" || dock.isFloating(workspaceId))
+  readonly property int fullscreenMode: dock ? dock.fullscreenModes[workspaceId] || 0 : 0
+  readonly property bool shown: !!dock && !!workspace && workspace.name.indexOf("special:") !== 0 && (position === "bottom" || dock.isFloating(workspaceId))
   readonly property bool fullscreen: fullscreenMode >= 2
   readonly property bool autohide: !!dock && (fullscreen ? dock.fullscreenAutohide : dock.autohide)
   property bool revealed: false
@@ -249,7 +239,7 @@ PanelWindow {
   // The visible dock reserves its edge from tiled and maximized windows.
   // True fullscreen retains the complete output even when the dock is revealed.
   exclusionMode: ExclusionMode.Normal
-  exclusiveZone: contentShown && !fullscreen ? dockDepth + gap + hoverRoom : 0
+  exclusiveZone: contentShown && !fullscreen ? dockDepth + gap : 0
 
   anchors {
     top: window.position !== "bottom"

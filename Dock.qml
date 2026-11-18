@@ -167,6 +167,7 @@ Item {
         key: entry ? entry.id : "window:" + toplevels[i].address,
         hasEntry: !!entry && !entry.noDisplay,
         workspaceId: workspace ? workspace.id : -1,
+        regularWorkspace: !!workspace && workspace.name.indexOf("special:") !== 0,
         minimized: !!workspace && DockModel.isMinimizedWorkspace(workspace.name),
         address: toplevels[i].address,
         toplevel: toplevel
@@ -421,9 +422,46 @@ Item {
     for (var j = 0; j < workspaces.length; j++) root.readMode(workspaces[j].id)
   }
 
+  // Read committed compositor state after fullscreen handoffs. Quickshell's
+  // toplevel cache may still be handling the exit event from the former owner.
+  property var fullscreenModes: ({})
+
+  Timer {
+    id: fullscreenRefresh
+    interval: 85
+    onTriggered: {
+      if (fullscreenProc.running) restart()
+      else fullscreenProc.running = true
+    }
+  }
+
+  Process {
+    id: fullscreenProc
+    command: ["hyprctl", "-j", "clients"]
+    stdout: StdioCollector {
+      onStreamFinished: {
+        try {
+          var clients = JSON.parse(text)
+          var modes = {}
+          for (var i = 0; i < clients.length; i++) {
+            var client = clients[i]
+            if (client.workspace && client.mapped && !client.hidden) {
+              var id = client.workspace.id
+              modes[id] = Math.max(modes[id] || 0, Number(client.fullscreen) || 0)
+            }
+          }
+          root.fullscreenModes = modes
+        } catch (error) {
+          console.warn("Dock could not read Hyprland fullscreen state")
+        }
+      }
+    }
+  }
+
   Component.onCompleted: {
     refresh()
     syncItemModel()
+    fullscreenRefresh.restart()
   }
 
   Process {
@@ -452,6 +490,9 @@ Item {
       else if (name === "fullscreen") {
         Hyprland.refreshWorkspaces()
         Hyprland.refreshToplevels()
+        fullscreenRefresh.restart()
+      } else if (/^(closewindow|movewindow|movewindowv2|workspace|workspacev2)$/.test(name)) {
+        fullscreenRefresh.restart()
       }
     }
   }

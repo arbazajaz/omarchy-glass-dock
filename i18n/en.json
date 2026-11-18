@@ -53,5 +53,10 @@
   "dock.control.shadow": "Shadow",
   "dock.control.glow": "Icon glow",
   "dock.control.magnification": "Hover magnification",
-  "overview.closeWindow": "Close window"
+  "overview.closeWindow": "Close window",
+  "spaces.name": "Space %1",
+  "spaces.add": "Add workspace",
+  "spaces.remove": "Remove workspace",
+  "spaces.confirmRemove": "Move the open windows from %1 to %2 and remove %1?",
+  "spaces.moveRemove": "Move and remove"
 }
