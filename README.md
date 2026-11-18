@@ -35,10 +35,27 @@ dofile(glass_dock .. "window-management.lua")
 ```
 
 - **Appearance** enables compositor blur for the dock and overlays, plus a workspace slide animation. The blur radius is a Hyprland compositor setting.
-- **Gestures** adds four-finger swipes for the overview and sequential workspace switching. Remove any overlapping custom four-finger bindings before loading it.
+- **Gestures** adds macOS-style four-finger trackpad swipes. Remove any overlapping custom four-finger bindings before loading it.
 - **Window management** updates **Alt+Tab**, raises maximized floating windows on focus, and updates **Super+F** to preserve a displaced maximized window’s geometry. Application-specific fullscreen commands use Hyprland’s native behavior.
 
 Run `hyprctl reload` and `hyprctl configerrors` after editing. Dynamic Wallpaper samples the active local wallpaper while selected and makes no network requests.
+
+### Four-finger trackpad gestures
+
+With `hypr/gestures.lua` loaded:
+
+| Swipe | Action |
+| --- | --- |
+| Up | Open Mission Control (the window overview) |
+| Down | Close Mission Control |
+| Left | Switch to the next numbered workspace |
+| Right | Switch to the previous numbered workspace |
+
+Horizontal swipes move one workspace at a time, including empty workspaces.
+
+## Update the launcher screenshot
+
+Replace [`docs/launcher.png`](docs/launcher.png) with a PNG captured after opening the launcher with **Super+Alt+Space** on an empty workspace. Commit and push the replacement to update the README preview and the marketplace submission's screenshot link.
 
 ## Remove
 
