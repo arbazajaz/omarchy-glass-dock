@@ -56,6 +56,34 @@ OverlayWindow {
     }
   }
 
+  property var closingWindow: null
+
+  function requestWindowClose(toplevel) {
+    if (!toplevel || closingWindow) return
+    if (Style.reduceMotion) {
+      toplevel.close()
+      return
+    }
+    closingWindow = toplevel
+    closeCardTimer.restart()
+  }
+
+  Timer {
+    id: closeCardTimer
+    interval: Style.duration(125)
+    onTriggered: {
+      if (overview.closingWindow) overview.closingWindow.close()
+      closeCardReset.restart()
+    }
+  }
+
+  // Allow the card to return when a window requests a save confirmation.
+  Timer {
+    id: closeCardReset
+    interval: 350
+    onTriggered: overview.closingWindow = null
+  }
+
   function close() {
     if (!shown || closing) return
     if (Style.reduceMotion) shown = false
@@ -191,7 +219,18 @@ OverlayWindow {
             delegate: Rectangle {
               id: tab
               required property var modelData
-              readonly property bool selected: overview.selectedWorkspace === (modelData ? modelData.id : null)
+              readonly property bool closingCard: overview.closingWindow === toplevel && !!toplevel
+            opacity: closingCard ? 0 : 1
+            scale: closingCard ? 0.95 : 1
+
+            Behavior on opacity {
+              NumberAnimation { duration: Style.duration(120); easing.type: Easing.OutCubic }
+            }
+            Behavior on scale {
+              NumberAnimation { duration: Style.duration(120); easing.type: Easing.OutCubic }
+            }
+
+            readonly property bool selected: overview.selectedWorkspace === (modelData ? modelData.id : null)
               width: tabLabel.implicitWidth + Style.space(28)
               height: Style.space(34)
               radius: height / 2
@@ -370,6 +409,7 @@ OverlayWindow {
 
             MouseArea {
               anchors.fill: frame
+              enabled: !windowCard.closingCard
               hoverEnabled: true
               cursorShape: Qt.PointingHandCursor
               onEntered: overview.selectedIndex = windowCard.index
@@ -377,6 +417,37 @@ OverlayWindow {
               Accessible.name: windowCard.toplevel ? windowCard.toplevel.title : ""
               Accessible.onPressAction: overview.activate(windowCard.modelData)
               onClicked: overview.activate(windowCard.modelData)
+            }
+
+            Rectangle {
+              id: closeButton
+              anchors.top: frame.top
+              anchors.right: frame.right
+              anchors.margins: Style.space(9)
+              width: Style.space(25)
+              height: width
+              radius: width / 2
+              color: closePointer.containsMouse ? "#cf3948" : "#d9232939"
+              border.color: "#8be2e8f4"
+
+              Text {
+                anchors.centerIn: parent
+                textFormat: Text.PlainText
+                text: "×"
+                color: "white"
+                font.pixelSize: Style.space(17)
+              }
+
+              MouseArea {
+                id: closePointer
+                anchors.fill: parent
+                hoverEnabled: true
+                cursorShape: Qt.PointingHandCursor
+                Accessible.role: Accessible.Button
+                Accessible.name: strings.t("overview.closeWindow")
+                Accessible.onPressAction: overview.requestWindowClose(windowCard.toplevel)
+                onClicked: overview.requestWindowClose(windowCard.toplevel)
+              }
             }
           }
         }

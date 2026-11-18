@@ -48,6 +48,34 @@ function isMinimizedWorkspace(name) {
   return String(name || "") === MINIMIZED_WORKSPACE
 }
 
+// Chromium web app classes include a profile suffix; the desktop launcher
+// normally records Default even when another profile opens the same URL.
+function webAppIdentity(appId) {
+  var match = /^(chrome-.+_)-(?:Default|Profile_[0-9]+|Guest_Profile)$/i.exec(String(appId || ""))
+  return match ? match[1] : ""
+}
+
+function webAppEntryId(appId, entries) {
+  var identity = webAppIdentity(appId)
+  if (!identity) return ""
+  var fallback = ""
+  var ambiguous = false
+  for (var i = 0; i < entries.length; i++) {
+    var entry = entries[i]
+    if (entry.startupClass === appId) return entry.id
+    if (webAppIdentity(entry.startupClass) !== identity) continue
+    if (fallback && fallback !== entry.id) ambiguous = true
+    fallback = entry.id
+  }
+  return ambiguous ? "" : fallback
+}
+
+// Only desktop entries can supply local icon paths. An unmatched Wayland
+// app ID is just window metadata and must never reach the image resolver.
+function iconNameForEntry(entry) {
+  return entry && entry.icon ? entry.icon : "application-x-executable"
+}
+
 // A terminal app's window carries the app id its launcher gave the terminal,
 // which no desktop entry names as its class. The entry that passes that app id
 // claims it, and so does a terminal entry for the command Omarchy's TUI
@@ -77,7 +105,7 @@ function claimingEntryId(appId, entries) {
 // the entry that claims it.
 function buildItems(pinned, windows) {
   var items = []
-  var byKey = {}
+  var byKey = Object.create(null)
 
   function itemFor(key, isPinned) {
     if (!byKey[key]) {
@@ -104,7 +132,7 @@ function buildItems(pinned, windows) {
 // joins goes at the end. Items the order does not know yet follow in the order
 // buildItems gave them.
 function orderItems(items, order) {
-  var byKey = {}
+  var byKey = Object.create(null)
   for (var i = 0; i < (items || []).length; i++) byKey[items[i].key] = items[i]
   var result = []
   var placed = {}
@@ -180,6 +208,9 @@ if (typeof module !== "undefined") {
     isDockWindow: isDockWindow,
     isMinimizedWorkspace: isMinimizedWorkspace,
     claimingEntryId: claimingEntryId,
+    webAppIdentity: webAppIdentity,
+    webAppEntryId: webAppEntryId,
+    iconNameForEntry: iconNameForEntry,
     buildItems: buildItems,
     orderItems: orderItems,
     orderWithKeyAt: orderWithKeyAt,

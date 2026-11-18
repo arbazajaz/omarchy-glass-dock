@@ -140,6 +140,8 @@ Item {
   }
 
   function entryForAppId(appId) {
+    var webAppId = DockModel.webAppEntryId(appId, DesktopEntries.applications.values)
+    if (webAppId) return DesktopEntries.byId(webAppId)
     var entry = DesktopEntries.heuristicLookup(appId)
     if (entry) return entry
     var id = DockModel.claimingEntryId(appId, root.terminalEntries)
@@ -162,7 +164,7 @@ Item {
       var entry = root.entryForAppId(toplevel.appId)
       var workspace = toplevels[i].workspace
       windows.push({
-        key: entry ? entry.id : toplevel.appId,
+        key: entry ? entry.id : "window:" + toplevels[i].address,
         hasEntry: !!entry && !entry.noDisplay,
         workspaceId: workspace ? workspace.id : -1,
         minimized: !!workspace && DockModel.isMinimizedWorkspace(workspace.name),
@@ -175,7 +177,7 @@ Item {
   }
 
   readonly property var itemsByKey: {
-    var byKey = {}
+    var byKey = Object.create(null)
     for (var i = 0; i < root.items.length; i++) byKey[root.items[i].key] = root.items[i]
     return byKey
   }
@@ -247,8 +249,7 @@ Item {
   }
 
   function iconFor(item) {
-    var entry = entryFor(item)
-    var icon = entry && entry.icon ? entry.icon : (item ? item.key : "")
+    var icon = DockModel.iconNameForEntry(entryFor(item))
     return root.appLibrary ? root.appLibrary.iconSource(icon) : Quickshell.iconPath(icon, true)
   }
 
@@ -273,6 +274,17 @@ Item {
     }
     var monitor = Hyprland.focusedMonitor
     var workspaceId = monitor && monitor.activeWorkspace ? monitor.activeWorkspace.id : -1
+    var entry = entryFor(item)
+    if (entry && DockModel.webAppIdentity(entry.startupClass) && root.isFloating(workspaceId)) {
+      var active = item.windows.find(function(window) {
+        return !window.minimized && window.workspaceId === workspaceId && window.toplevel.activated
+      })
+      if (active && /^(0x)?[0-9a-f]+$/i.test(active.address)) {
+        var address = active.address.indexOf("0x") === 0 ? active.address : "0x" + active.address
+        Quickshell.execDetached(["omarchy-hyprland-window-minimize", address])
+        return
+      }
+    }
     var index = DockModel.pickWindow(item.windows.map(function(window) {
       return { workspaceId: window.workspaceId, minimized: window.minimized, activated: window.toplevel.activated }
     }), workspaceId)

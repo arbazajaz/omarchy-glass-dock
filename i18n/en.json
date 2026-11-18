@@ -52,5 +52,6 @@
   "dock.control.radius": "Border radius",
   "dock.control.shadow": "Shadow",
   "dock.control.glow": "Icon glow",
-  "dock.control.magnification": "Hover magnification"
+  "dock.control.magnification": "Hover magnification",
+  "overview.closeWindow": "Close window"
 }
