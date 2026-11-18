@@ -16,7 +16,12 @@ Disable any other dock clone first. This plugin declares itself a clone of the b
 
 ## Use
 
-- Right-click the nine-dot icon for Dock Settings, or run `omarchy-shell omarchy.dock settings`. Click a setting to cycle forward or right-click to cycle backward. Themes and sizing controls apply live.
+### Dock Settings
+
+Right-click the **nine-dot app launcher icon in the dock** to open Dock Settings. If the dock is hidden, move the pointer to its screen edge first. You can also open settings with `omarchy-shell omarchy.dock settings`. Click a setting to cycle forward or right-click to cycle backward. Theme, size, position, and auto-hide changes apply live.
+
+### Launcher and overview
+
 - Click the nine-dot icon or press **Super+Alt+Space** for the launcher. Type to search and click outside the apps to dismiss it.
 - Run `omarchy-shell omarchy.dock overviewOpen` to see open windows grouped by desktop. Select a preview to focus its window. If Hyprland cannot capture a preview, the card shows an app icon.
 - A visible dock reserves space in normal use. In fullscreen it reveals at the screen edge and briefly overlays the application without resizing it.
@@ -52,10 +57,6 @@ With `hypr/gestures.lua` loaded:
 | Right | Switch to the previous numbered workspace |
 
 Horizontal swipes move one workspace at a time, including empty workspaces.
-
-## Update the launcher screenshot
-
-Replace [`docs/launcher.png`](docs/launcher.png) with a PNG captured after opening the launcher with **Super+Alt+Space** on an empty workspace. Commit and push the replacement to update the README preview and the marketplace submission's screenshot link.
 
 ## Remove
 
