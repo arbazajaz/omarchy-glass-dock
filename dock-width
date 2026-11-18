@@ -1,0 +1,44 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+source omarchy-shell-config
+
+option="${1:-}"
+value="${2:-}"
+case "$option" in
+  width|size|style|autohide|fullscreenAutohide|height|iconSize|spacing|opacity|hideDelay|animationSpeed|blur|position|backgroundColor|radius|shadow|glow|magnification) ;;
+  *) value="$option"; option=width ;;
+esac
+
+number() {
+  local min="$1" max="$2"
+  [[ $value =~ ^(0|[1-9][0-9]{0,3})$ ]] && (( value >= min && value <= max )) ||
+    fail "$option must be an integer from $min to $max"
+  json="$value"
+}
+
+case "$option:$value" in
+  width:fit|size:compact|size:regular|size:large|style:liquid|style:midnight|style:native|style:aurora|style:neon|style:frosted-dark|style:wallpaper|style:frosted|style:graphite|style:light|style:gradient|style:minimal|style:clear|blur:off|blur:soft|blur:strong|position:top|position:bottom|position:left|position:right)
+    json="\"$value\""
+    ;;
+  backgroundColor:theme) json=null ;;
+  backgroundColor:*)
+    [[ $value =~ ^#[[:xdigit:]]{6}$ ]] || fail "backgroundColor must be #RRGGBB or theme"
+    json="\"$value\""
+    ;;
+  radius:*) number 0 52 ;;
+  shadow:*|glow:*) number 0 100 ;;
+  magnification:*) number 0 80 ;;
+  width:*) number 20 100 ;;
+  height:*) number 36 104 ;;
+  iconSize:*) number 22 72 ;;
+  spacing:*) number 4 30 ;;
+  opacity:*) number 10 100 ;;
+  hideDelay:*) number 0 1500 ;;
+  animationSpeed:*) number 50 200 ;;
+  autohide:on|fullscreenAutohide:on) json=true ;;
+  autohide:off|fullscreenAutohide:off) json=false ;;
+  *) fail "invalid dock setting: $option $value" ;;
+esac
+
+commit "$NORMALIZE | .dock[\$option] = \$value" --arg option "$option" --argjson value "$json"

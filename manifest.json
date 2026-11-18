@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "id": "io.github.arbazajaz.glass-dock",
+  "name": "Glass Dock",
+  "version": "1.0.0",
+  "author": "arbazajaz and Omarchy contributors",
+  "description": "Customizable glass dock, fullscreen app launcher, and workspace window overview for Omarchy.",
+  "kinds": [
+    "service"
+  ],
+  "entryPoints": {
+    "service": "Dock.qml"
+  },
+  "omarchy": {
+    "clonedFrom": "omarchy.dock"
+  }
+}

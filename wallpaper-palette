@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+set -euo pipefail
+state="${XDG_STATE_HOME:-$HOME/.local/state}"
+path=$(readlink -f -- "$state/omarchy/current/background")
+[[ -f "$path" ]] || exit 1
+# Decode one small frame and take only RGB values from ImageMagick's palette.
+timeout 5 magick "${path}[0]" -thumbnail 48x48 -colors 12 -depth 8 -unique-colors txt:- |
+  awk 'match($0, /#[[:xdigit:]]{6}/) { print substr($0, RSTART, RLENGTH) }'
