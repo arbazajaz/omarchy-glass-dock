@@ -6,6 +6,8 @@ Item {
   property url source
   property string appId
   property bool launcher: false
+  property bool useFilesFace: false
+  readonly property bool filesFace: useFilesFace && appId.toLowerCase() === "org.gnome.nautilus"
   readonly property var colors: paletteFor(appId.toLowerCase())
 
   function paletteFor(id) {
@@ -40,12 +42,57 @@ Item {
     }
   }
 
+  Canvas {
+    anchors.fill: face
+    visible: tile.filesFace
+    antialiasing: true
+    onWidthChanged: requestPaint()
+    onHeightChanged: requestPaint()
+    onPaint: {
+      var ctx = getContext("2d")
+      ctx.reset()
+      ctx.clearRect(0, 0, width, height)
+      ctx.scale(width / 100, height / 100)
+
+      // The lighter half follows the tile's corner radius and the curved face.
+      var light = ctx.createLinearGradient(49, 3, 92, 98)
+      light.addColorStop(0, "#f2fcff")
+      light.addColorStop(1, "#8ed1fb")
+      ctx.beginPath()
+      ctx.moveTo(58, 3)
+      ctx.lineTo(73, 3)
+      ctx.quadraticCurveTo(97, 3, 97, 27)
+      ctx.lineTo(97, 73)
+      ctx.quadraticCurveTo(97, 97, 73, 97)
+      ctx.lineTo(46, 97)
+      ctx.bezierCurveTo(48, 84, 51, 75, 45, 61)
+      ctx.quadraticCurveTo(53, 59, 56, 53)
+      ctx.lineTo(48, 53)
+      ctx.quadraticCurveTo(52, 24, 58, 3)
+      ctx.closePath()
+      ctx.fillStyle = light
+      ctx.fill()
+
+      ctx.strokeStyle = "#123955"
+      ctx.lineCap = "round"
+      ctx.lineWidth = 5
+      ctx.beginPath()
+      ctx.moveTo(28, 34)
+      ctx.lineTo(28, 40)
+      ctx.moveTo(72, 31)
+      ctx.lineTo(72, 37)
+      ctx.moveTo(27, 65)
+      ctx.quadraticCurveTo(51, 83, 75, 62)
+      ctx.stroke()
+    }
+  }
+
   Image {
     id: appImage
     anchors.centerIn: parent
     width: parent.width * 0.72
     height: width
-    source: tile.launcher ? "" : tile.source
+    source: tile.launcher || tile.filesFace ? "" : tile.source
     sourceSize: Qt.size(128, 128)
     fillMode: Image.PreserveAspectFit
     asynchronous: true
@@ -55,7 +102,7 @@ Item {
 
   Grid {
     id: glyph
-    visible: tile.launcher || appImage.status === Image.Error || appImage.status === Image.Null
+    visible: !tile.filesFace && (tile.launcher || appImage.status === Image.Error || appImage.status === Image.Null)
     anchors.centerIn: parent
     columns: 3
     spacing: tile.width * 0.055

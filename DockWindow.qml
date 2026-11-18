@@ -640,6 +640,7 @@ PanelWindow {
       width: window.iconSize
       height: width
       appId: appSlot.key
+      useFilesFace: true
       source: window.dock && appSlot.modelData ? window.dock.iconFor(appSlot.modelData) : ""
       opacity: appSlot.launching ? appSlot.pulse : 1
       transform: Translate {
